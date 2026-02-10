@@ -1,0 +1,312 @@
+% NeurIPS-style (or ICML-style) 8-page paper skeleton
+% ---------------------------------------------------
+% NOTE: For NeurIPS, you typically use the neurips_YYYY style.
+% Replace YYYY with the target year once you know it (e.g., neurips_2024).
+% This file is a clean starting point that compiles with standard NeurIPS style.
+
+\documentclass{article}
+
+% If you have the NeurIPS style file:
+% \usepackage[final]{neurips_2024} % or [preprint], [final]
+% Otherwise this falls back to plain article formatting.
+\IfFileExists{neurips_2024.sty}{
+  \usepackage[preprint]{neurips_2024}
+}{
+  \usepackage[margin=1in]{geometry}
+}
+
+% --------------------
+% Packages
+% --------------------
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\IfFileExists{microtype.sty}{\usepackage{microtype}}{}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{xcolor}
+
+% Theorems
+\usepackage{amsthm}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{proposition}{Proposition}
+\newtheorem{corollary}{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\newtheorem{remark}{Remark}
+
+% Algorithms are written as plain enumerations for portability.
+
+% --------------------
+% Macros
+% --------------------
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\KL}{\mathrm{KL}}
+\newcommand{\softmax}{\mathrm{softmax}}
+\newcommand{\indic}{\mathbb{I}}
+\newcommand{\Dom}{\mathrm{Dom}}
+\newcommand{\tr}{\mathrm{tr}}
+\providecommand{\coloneqq}{:=}
+
+% --------------------
+% Title
+% --------------------
+\title{Variational Partial Orders for Traces and Structure Learning}
+
+\author{
+Anonymous authors\\
+Paper under double-blind review
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Partial orders arise in two ubiquitous regimes: (i) \emph{execution traces}, where a latent
+poset is observed through noisy linearizations, and (ii) \emph{graph structure learning}, where
+domain experts provide partial-order priors over variables. These regimes have developed largely
+separate toolkits: probabilistic poset generative models with expensive inference, and differentiable
+DAG learning with partial-order constraints that can be computationally prohibitive when enforced
+na{\"i}vely via transitive closure. We propose a unified variational perspective: (1) a latent-embedding
+poset model for de-linearizing traces with a frontier-restricted Plackett--Luce likelihood, (2) an
+efficient representation of partial-order priors via transitive reduction and maximal-path factoring to
+avoid quadratic constraint blow-up, and (3) scalable variational inference objectives and gradients,
+including importance-weighted VI with REINFORCE/VIMCO-style estimators when reparameterization
+is unavailable. The result is a plug-and-play route to amortized, uncertainty-aware poset inference
+and prior-constrained structure learning across domains.
+\end{abstract}
+
+\section{Introduction}
+Partial orders (posets) provide a compact representation of precedence constraints and concurrency.
+They appear in \emph{trace de-linearization} problems (workflow logs, tool-augmented LLM traces,
+robotic assembly), where observed sequences are noisy linear extensions of a latent partial order; and
+in \emph{structure learning} problems (causal discovery), where experts often know partial order
+constraints (e.g., gene activation cascades, treatment protocols, seasonal patterns).
+
+Despite this shared object, current methods split across regimes. Trace models typically treat the poset
+as a latent discrete object and rely on MCMC, while differentiable DAG learning optimizes continuous
+graph parameters in the DAG space and historically lacked efficient ways to incorporate general
+partial-order priors. Recent work shows that enforcing partial orders via path prohibitions over the
+transitive closure can incur $\Theta(m^2)$ terms for a chain of length $m$, making long ordering priors
+impractical, and proposes an augmented-acyclicity alternative based on transitive reduction and maximal
+paths.
+
+This paper draft provides a unified NeurIPS-style narrative:
+\begin{itemize}
+\item We formalize a latent-embedding poset model for traces (your HPO) and derive variational objectives.
+\item We show how to incorporate partial-order priors efficiently (avoid $\Theta(|O^+|)$ penalties) using maximal-path factoring.
+\item We present VI algorithms for this setting, including non-reparameterized importance-weighted VI with VIMCO-style gradients.
+\end{itemize}
+
+\section{Background and Problem Setup}
+
+\subsection{Partial orders, transitive closure, and transitive reduction}
+Let $O \subseteq [m]\times[m]$ encode partial-order relations $i \succ j$ among $m$ actions/variables.
+Its transitive closure $O^+$ contains all implied relations (if $i\succ j$ and $j\succ k$ then $i\succ k$).
+The transitive reduction $O^-$ is the smallest relation satisfying $(O^-)^+ = O^+$.
+
+\begin{remark}[Quadratic blow-up for long chains]
+For a single chain $v_1 \succ v_2 \succ \cdots \succ v_m$, the transitive closure contains all pairs
+$(v_a,v_b)$ with $a<b$, hence $|O^+| = \binom{m}{2} = \Theta(m^2)$. Any constraint or penalty that
+enumerates all $(i,j)\in O^+$ inherits this quadratic scaling.
+\end{remark}
+
+\subsection{Two regimes: traces vs.\ IID samples}
+\textbf{Trace regime:} We observe sequences $y^{(i)}$ that are noisy linear extensions of a latent poset $h$.
+\textbf{Structure-learning regime:} We observe samples $D$ from an SEM/Bayesian network and seek a DAG
+(or weighted adjacency $W$) while respecting an ordering prior $O$.
+
+\section{Latent Posets from Traces (HPO Model)}
+
+\subsection{Prior over latent embeddings and induced poset}
+Let $m$ be the number of actions and $K$ the latent dimension. We place a Gaussian prior over
+action embeddings:
+\begin{equation}
+U_j \sim \mathcal{N}(0, \Sigma_\rho), \quad j=1,\ldots,m,
+\label{eq:U_prior}
+\end{equation}
+where $\Sigma_\rho$ is exchangeable, e.g.\ $\Sigma_\rho=(1-\rho)I+\rho \mathbf{1}\mathbf{1}^\top$, $\rho\in[0,1]$.
+We deterministically map $U$ to a strict partial order:
+\begin{equation}
+h = \Dom(U).
+\label{eq:Dom}
+\end{equation}
+
+\begin{definition}[Coordinate-wise dominance map]
+A simple instantiation is: $i \succ_h j$ iff $U_{i,k} > U_{j,k}$ for all $k\in[K]$.
+\end{definition}
+
+\begin{theorem}[Dominance induces a strict partial order]
+If $i \succ_h j \iff \forall k,\ U_{i,k} > U_{j,k}$, then $\succ_h$ is irreflexive and transitive, hence $h$ is a strict partial order.
+\end{theorem}
+\begin{proof}[Proof sketch]
+Irreflexive: $U_{i,k} > U_{i,k}$ is impossible. Transitive: coordinate-wise $>$ is transitive.
+\end{proof}
+
+\subsection{Frontier-restricted Plackett--Luce likelihood}
+Given a trace $y=(y_1,\ldots,y_T)$ and prefix $y_{<t}=(y_1,\ldots,y_{t-1})$, define the remaining actions:
+\[
+R_t \coloneqq A \setminus \{y_1,\ldots,y_{t-1}\}.
+\]
+The feasible set (frontier) is the set of minimal elements of $R_t$ under $\succ_h$:
+\begin{equation}
+F_t(h;y_{<t}) \coloneqq \{a\in R_t: \nexists b\in R_t \text{ such that } b \succ_h a\}.
+\label{eq:frontier}
+\end{equation}
+We model the next action via a frontier-restricted Plackett--Luce / Boltzmann policy with trembling-hand noise:
+\begin{equation}
+p(y_t \mid y_{<t}, h, \beta, \epsilon) =
+(1-\epsilon)\frac{\exp(\beta Q(y_t;h,t))}{\sum_{a\in F_t(h)}\exp(\beta Q(a;h,t))}
++ \epsilon\frac{1}{|R_t|},
+\label{eq:frontier_softmax}
+\end{equation}
+where the first term is treated as $0$ if $y_t\notin F_t(h)$.
+
+A full trace has likelihood:
+\begin{equation}
+p(y \mid h,\beta,\epsilon) = \prod_{t=1}^T p(y_t \mid y_{<t}, h, \beta,\epsilon).
+\label{eq:trace_likelihood}
+\end{equation}
+
+\subsection{Posterior}
+Let $D=\{y^{(i)}\}_{i=1}^n$ be traces. Unknowns are $(U,\rho,\beta,K)$ (optionally infer $K$). The posterior:
+\begin{equation}
+p(U,\rho,\beta,K \mid D) \propto p(U\mid\rho,K)p(\rho)p(\beta)p(K)\prod_{i=1}^n p(y^{(i)}\mid h(U),\beta,\epsilon).
+\label{eq:posterior}
+\end{equation}
+
+\section{Variational Inference for HPO (HPO-VI)}
+
+\subsection{ELBO}
+Choose a variational family $q_\phi(U,\rho,\beta,K)$ (e.g.\ mean-field). The ELBO is:
+\begin{align}
+\mathcal{L}(\phi)
+&= \E_{q_\phi}\Big[
+\sum_{i=1}^n \log p(y^{(i)}\mid h(U),\beta,\epsilon)
++ \log p(U\mid\rho,K) + \log p(\rho)+\log p(\beta)+\log p(K)
+- \log q_\phi(U,\rho,\beta,K)
+\Big].
+\label{eq:elbo}
+\end{align}
+The key difficulty is that $h(U)=\Dom(U)$ is discrete/piecewise-constant in $U$, making naive
+reparameterized gradients ineffective; we therefore consider score-function estimators and
+importance-weighted objectives.
+
+\subsection{Importance-weighted objectives}
+Let $z=(U,\rho,\beta,K)$ and draw $z^{1:N}\sim q_\phi$. Define importance weights
+$w_n=\frac{p(D,z^{(n)})}{q_\phi(z^{(n)})}$. A VR-IWAE-style objective is:
+\begin{equation}
+\mathcal{L}^{(\alpha)}_N(\phi) = \frac{1}{1-\alpha}\E\left[\log\left(\frac1N\sum_{n=1}^N w_n^{1-\alpha}\right)\right], \quad \alpha\in[0,1).
+\label{eq:vr_iwae}
+\end{equation}
+
+\subsection{Score-function gradients and VIMCO-style control variates}
+When reparameterization is unavailable, we estimate $\nabla_\phi \mathcal{L}^{(\alpha)}_N$ using
+REINFORCE/VIMCO-type estimators with per-sample baselines. (We use the general VIMCO form
+and a ``star'' control variate variant for improved SNR; see Appendix for details and implementation.)
+\medskip
+
+\paragraph{Algorithm 1 (HPO-VI): Importance-weighted VI for dominance-induced posets.}
+\begin{enumerate}
+\item \textbf{Input:} traces $D=\{y^{(i)}\}$, hyperparameters $(N,\alpha,\epsilon)$, learning rate $\eta$.
+\item Initialize variational parameters $\phi$ for $q_\phi(z)$, where $z=(U,\rho,\beta,K)$.
+\item Repeat until convergence:
+\begin{enumerate}
+\item Sample $z^{(1)},\ldots,z^{(N)} \sim q_\phi(z)$.
+\item For each $n\in\{1,\ldots,N\}$:
+\begin{enumerate}
+\item $h^{(n)} \leftarrow \Dom(U^{(n)})$.
+\item $\log p_n \leftarrow \log p(z^{(n)}) + \sum_i \log p(y^{(i)}\mid h^{(n)},\beta^{(n)},\epsilon)$.
+\item $\log q_n \leftarrow \log q_\phi(z^{(n)})$.
+\item $w_n \leftarrow \exp(\log p_n - \log q_n)$.
+\end{enumerate}
+\item $\widehat{\mathcal{L}} \leftarrow \frac{1}{1-\alpha}\log\left(\frac1N\sum_{n=1}^N w_n^{1-\alpha}\right)$.
+\item $\widehat{\nabla_\phi \mathcal{L}} \leftarrow$ VIMCO-style gradient estimator with per-sample baselines.
+\item $\phi \leftarrow \phi + \eta\,\widehat{\nabla_\phi \mathcal{L}}$.
+\end{enumerate}
+\item \textbf{Output:} $q_\phi(z)$ and posterior summaries of $h=\Dom(U)$.
+\end{enumerate}
+
+\section{Partial-Order-Constrained Differentiable Structure Learning (PO-DSL)}
+
+\subsection{Partial orders as path prohibitions and quadratic overhead}
+In differentiable DAG learning, $W\in\R^{d\times d}$ parameterizes a directed graph. Acyclicity is enforced
+via a differentiable constraint $h(W)=0$ based on matrix power series. A general partial order $O$ can be
+encoded as path prohibitions: for each $(i,j)\in O^+$, forbid any path $j\rightsquigarrow i$. A continuous
+characterization yields a penalty of the form
+\begin{equation}
+p(W,O)=\sum_{(i,j)\in O^+}\left(\sum_{l=1}^d (W\circ W)^l\right)_{j,i},
+\label{eq:path_penalty}
+\end{equation}
+which scales with $|O^+|$ and thus can be $\Theta(m^2)$ for a chain length $m$.
+
+\subsection{Efficient constraint via transitive reduction and maximal paths}
+Let $O^-$ be the transitive reduction and $P(O^-)$ the set of maximal paths. Define
+\begin{align}
+h'(W,O) &= \sum_{o\in P(O^-)} h(A(W,o)),
+\label{eq:hprime_def}\\
+A(W,o) &= W + \tau W_o - W\circ W_o,\quad (W_o)_{i,j}=\indic[(i,j)\in o].
+\label{eq:augment}
+\end{align}
+
+\begin{theorem}[Equivalence of augmented acyclicity]
+A graph $G(W)$ is a DAG and satisfies partial order constraints $O$ iff $h'(W,O)=0$.
+\end{theorem}
+\begin{proof}[Proof sketch]
+Each maximal path $o$ is enforced by requiring acyclicity after adding $o$ as virtual edges;
+maximal paths cover the transitive closure when constructed from $O^-$.
+\end{proof}
+
+\paragraph{Algorithm 2 (PO-DSL): Augmented acyclicity for partial-order priors.}
+\begin{enumerate}
+\item \textbf{Input:} $W$, partial order $O$, acyclicity function $h(\cdot)$, strength $\tau$.
+\item $O^- \leftarrow \textsc{TransitiveReduction}(O)$.
+\item $P \leftarrow \textsc{MaximalPaths}(O^-)$.
+\item Initialize $s \leftarrow 0$.
+\item For each path $o\in P$:
+\begin{enumerate}
+\item Construct $W_o$ with $(W_o)_{i,j}=\indic[(i,j)\in o]$.
+\item $A \leftarrow W + \tau W_o - W\circ W_o$.
+\item $s \leftarrow s + h(A)$.
+\end{enumerate}
+\item \textbf{Return} $h'(W,O)=s$.
+\end{enumerate}
+
+\section{Unified Perspective and Hybrid Use Cases}
+Our two regimes interact naturally:
+\begin{itemize}
+\item \textbf{From traces to priors:} inferred poset marginals from HPO-VI can define ordering priors $O$ for PO-DSL causal discovery.
+\item \textbf{From priors to traces:} domain ordering priors can be injected into HPO-VI by constraining only a small set of maximal chains (avoid enumerating $O^+$).
+\end{itemize}
+
+\section{Experiments (Outline)}
+\textbf{Synthetic posets:} recover $h^\star$ from traces under varying $m,K,\epsilon$; compare MCMC vs.\ HPO-VI.\\
+\textbf{Long-chain stress test:} demonstrate quadratic scaling of naive $|O^+|$ penalties vs.\ maximal-path scaling of augmented constraints.\\
+\textbf{Real logs:} workflow/agent traces; show uncertainty-aware poset recovery and downstream execution utility.\\
+\textbf{Causal discovery:} inject inferred priors into NOTEARS/DAGMA-style backbones and measure SHD/F1 improvements.
+
+\section{Discussion}
+\textbf{VI tradeoffs:} importance-weighted objectives tighten bounds but require careful gradient estimation;
+VIMCO-style estimators with improved control variates mitigate SNR degradation.\\
+\textbf{Complex partial orders:} maximal-path factoring remains efficient for long chains but may grow for multi-chained priors.\\
+\textbf{Future work:} amortized inference; soft relaxations of dominance; joint learning of utility policies $Q$ and poset structure.
+
+\section{Conclusion}
+We presented a unified NeurIPS-style framework connecting latent-poset trace models and partial-order-constrained differentiable graph learning. The core message is operational:
+avoid enumerating transitive closure constraints for long chains by maximal-path factoring, and use
+non-reparameterized importance-weighted VI when discrete poset structure breaks pathwise gradients.
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\appendix
+\section{Appendix: Practical Gradient Estimators (Sketch)}
+This appendix is a placeholder for:
+(i) the explicit VR-IWAE/IWAE score-function gradient,
+(ii) VIMCO per-sample baselines, and
+(iii) a VIMCO-$\star$ control variate variant.
+
+\end{document}
