@@ -25,6 +25,7 @@
 \usepackage{hyperref}
 \usepackage{url}
 \usepackage{xcolor}
+\usepackage[ruled,vlined,linesnumbered]{algorithm2e}
 
 % Theorems
 \usepackage{amsthm}
@@ -35,8 +36,6 @@
 \theoremstyle{definition}
 \newtheorem{definition}{Definition}
 \newtheorem{remark}{Remark}
-
-% Algorithms are written as plain enumerations for portability.
 
 % --------------------
 % Macros
@@ -191,44 +190,132 @@ Choose a variational family $q_\phi(U,\rho,\beta,K)$ (e.g.\ mean-field). The ELB
 \Big].
 \label{eq:elbo}
 \end{align}
-The key difficulty is that $h(U)=\Dom(U)$ is discrete/piecewise-constant in $U$, making naive
-reparameterized gradients ineffective; we therefore consider score-function estimators and
-importance-weighted objectives.
+The key difficulty is that $h(U)=\Dom(U)$ is piecewise-constant in $U$: within any
+connected region of the embedding space the induced poset is fixed, and the function is
+discontinuous at boundaries.  Pathwise/reparameterized gradients through the likelihood are
+therefore zero almost everywhere, making standard reparameterization tricks ineffective.
+We therefore require score-function estimators and importance-weighted objectives.
 
-\subsection{Importance-weighted objectives}
-Let $z=(U,\rho,\beta,K)$ and draw $z^{1:N}\sim q_\phi$. Define importance weights
-$w_n=\frac{p(D,z^{(n)})}{q_\phi(z^{(n)})}$. A VR-IWAE-style objective is:
+\subsection{Importance-weighted objectives (VR-IWAE)}
+\label{sec:vr_iwae}
+Let $z=(U,\rho,\beta,K)$ and draw $z_{1:N}\stackrel{iid}{\sim} q_\phi$.
+Define the unnormalized importance weight
 \begin{equation}
-\mathcal{L}^{(\alpha)}_N(\phi) = \frac{1}{1-\alpha}\E\left[\log\left(\frac1N\sum_{n=1}^N w_n^{1-\alpha}\right)\right], \quad \alpha\in[0,1).
+w(z) \coloneqq \frac{p(D,z)}{q_\phi(z)}
+= \exp\!\big(\log p(D,z)-\log q_\phi(z)\big),
+\label{eq:imp_weight}
+\end{equation}
+where
+\begin{equation}
+\log p(D,z) =
+\log p(U\mid\rho,K)+\log p(\rho)+\log p(\beta)+\log p(K)
++ \sum_{i=1}^n \log p(y^{(i)}\mid h(U),\beta,\epsilon).
+\label{eq:log_joint}
+\end{equation}
+Following \citet{burda2016iwae} and \citet{daudel2026importance},
+the VR-IWAE family of objectives parameterized by $\alpha\in[0,1)$ is:
+\begin{equation}
+\mathcal{L}^{(\alpha)}_N(\phi)
+= \frac{1}{1-\alpha}\,
+\E\!\left[\log\!\left(\frac{1}{N}\sum_{n=1}^N w(z_n)^{1-\alpha}\right)\right].
 \label{eq:vr_iwae}
 \end{equation}
+When $\alpha=0$ this recovers the standard IWAE bound~\citep{burda2016iwae};
+for $\alpha>0$ one obtains R\'{e}nyi-divergence bounds analyzed in~\citet{daudel2026importance}.
 
-\subsection{Score-function gradients and VIMCO-style control variates}
-When reparameterization is unavailable, we estimate $\nabla_\phi \mathcal{L}^{(\alpha)}_N$ using
-REINFORCE/VIMCO-type estimators with per-sample baselines. (We use the general VIMCO form
-and a ``star'' control variate variant for improved SNR; see Appendix for details and implementation.)
-\medskip
+\subsection{Score-function gradient decomposition}
+\label{sec:reinforce_grad}
+Define the self-normalized weights
+\begin{equation}
+W_n^{(1-\alpha)}
+\coloneqq
+\frac{w(z_n)^{1-\alpha}}{\sum_{j=1}^N w(z_j)^{1-\alpha}}.
+\label{eq:snw}
+\end{equation}
+For any variational parameter block $\psi\subseteq\phi$,
+the (exact) score-function gradient of~\eqref{eq:vr_iwae} decomposes as~\citep{daudel2026importance}:
+\begin{align}
+\nabla_\psi \mathcal{L}^{(\alpha)}_N
+&= \E_{z_{1:N}\sim q_\phi}\Bigg[
+\underbrace{\sum_{n=1}^N W_n^{(1-\alpha)}\,\nabla_\psi \log w(z_n)}_{\text{self-normalized IS term}}
++ \underbrace{\frac{1}{1-\alpha}\left(\sum_{n=1}^N \nabla_\psi \log q_\phi(z_n)\right)
+\log\!\left(\frac{1}{N}\sum_{j=1}^N w(z_j)^{1-\alpha}\right)}_{\text{REINFORCE term (high variance)}}
+\Bigg].
+\label{eq:reinforce_grad}
+\end{align}
+Since $p(D,z)$ does not depend on variational parameters $\psi\subseteq\phi$,
+we have $\nabla_\psi\log w(z)=-\nabla_\psi\log q_\phi(z)$.
+The first term is well-behaved, but the second (REINFORCE) term can exhibit
+SNR collapse as $N$ grows~\citep{daudel2026importance,mnih2016vimco},
+motivating control-variate methods.
 
-\paragraph{Algorithm 1 (HPO-VI): Importance-weighted VI for dominance-induced posets.}
-\begin{enumerate}
-\item \textbf{Input:} traces $D=\{y^{(i)}\}$, hyperparameters $(N,\alpha,\epsilon)$, learning rate $\eta$.
-\item Initialize variational parameters $\phi$ for $q_\phi(z)$, where $z=(U,\rho,\beta,K)$.
-\item Repeat until convergence:
-\begin{enumerate}
-\item Sample $z^{(1)},\ldots,z^{(N)} \sim q_\phi(z)$.
-\item For each $n\in\{1,\ldots,N\}$:
-\begin{enumerate}
-\item $h^{(n)} \leftarrow \Dom(U^{(n)})$.
-\item $\log p_n \leftarrow \log p(z^{(n)}) + \sum_i \log p(y^{(i)}\mid h^{(n)},\beta^{(n)},\epsilon)$.
-\item $\log q_n \leftarrow \log q_\phi(z^{(n)})$.
-\item $w_n \leftarrow \exp(\log p_n - \log q_n)$.
-\end{enumerate}
-\item $\widehat{\mathcal{L}} \leftarrow \frac{1}{1-\alpha}\log\left(\frac1N\sum_{n=1}^N w_n^{1-\alpha}\right)$.
-\item $\widehat{\nabla_\phi \mathcal{L}} \leftarrow$ VIMCO-style gradient estimator with per-sample baselines.
-\item $\phi \leftarrow \phi + \eta\,\widehat{\nabla_\phi \mathcal{L}}$.
-\end{enumerate}
-\item \textbf{Output:} $q_\phi(z)$ and posterior summaries of $h=\Dom(U)$.
-\end{enumerate}
+\subsection{VIMCO and VIMCO-$\star$ control variates}
+\label{sec:vimco}
+
+\paragraph{General VIMCO baselines.}
+The VIMCO framework~\citep{mnih2016vimco} replaces the global log-sum REINFORCE signal
+with per-sample ``leave-one-out'' baselines $f^{(\alpha)}_{-n}$ that depend only on $z_{-n}$:
+since $\E[\nabla_\psi\log q_\phi(z_n)\,f(z_{-n})]=0$, unbiasedness is preserved.
+\citet{daudel2026importance} provide a systematic family of such baselines for general $\alpha$.
+
+\paragraph{VIMCO-$\star$ for IWAE ($\alpha=0$).}
+For the standard IWAE case ($\alpha=0$), define $W_n=\frac{w(z_n)}{\sum_{j=1}^N w(z_j)}$.
+The VIMCO-$\star$ estimator~\citep{daudel2026importance} takes a particularly simple form:
+\begin{equation}
+\boxed{
+\widehat{\nabla_\psi \mathcal{L}^{(0)}_N}
+= \sum_{n=1}^N\Big[
+W_n\,\nabla_\psi \log w(z_n)
+- \log(1-W_n)\,\nabla_\psi \log q_\phi(z_n)
+\Big].
+}
+\label{eq:vimco_star}
+\end{equation}
+For variational parameters $\psi\subseteq\phi$ (where $\nabla_\psi\log w=-\nabla_\psi\log q$),
+this simplifies to:
+\begin{equation}
+\widehat{\nabla_\psi \mathcal{L}^{(0)}_N}
+= -\sum_{n=1}^N \big(W_n+\log(1-W_n)\big)\,\nabla_\psi \log q_\phi(z_n).
+\label{eq:vimco_star_simplified}
+\end{equation}
+
+\begin{remark}[SNR scaling]
+\citet{daudel2026importance} prove that the signal-to-noise ratio (SNR) of the
+VIMCO-$\star$ estimator at $\alpha=0$ scales as $\sqrt{N}$, avoiding the SNR collapse
+that afflicts naive multi-sample REINFORCE estimators.
+This makes it the recommended default for HPO-VI.
+\end{remark}
+
+\begin{remark}[Implementation convenience]
+Equations~\eqref{eq:vimco_star}--\eqref{eq:vimco_star_simplified} never require gradients
+through $h(U)=\Dom(U)$; only $\log q_\phi(z_n)$ and its gradient w.r.t.\ variational
+parameters are needed.  This is the key practical advantage for HPO-VI.
+\end{remark}
+
+\subsection{Algorithm}
+
+\begin{algorithm}[t]
+\caption{HPO-VI with IWAE ($\alpha=0$) and VIMCO-$\star$ gradients}
+\label{alg:hpo_vi}
+\KwIn{Traces $D=\{y^{(i)}\}_{i=1}^n$, particles $N$, step size $\eta$, slip $\epsilon$}
+Initialize variational parameters $\phi$ for $q_\phi(z)$, $z=(U,\rho,\beta,K)$\;
+\While{not converged}{
+  Sample $z_{1:N}\sim q_\phi(z)$\;
+  \For{$n=1$ \KwTo $N$}{
+    $h^{(n)}\leftarrow \Dom(U^{(n)})$\;
+    $\log p_n \leftarrow \log p(z_n)+\sum_{i=1}^n \log p(y^{(i)}\mid h^{(n)},\beta^{(n)},\epsilon)$\;
+    $\log q_n \leftarrow \log q_\phi(z_n)$\;
+    $\log w_n \leftarrow \log p_n - \log q_n$\;
+  }
+  $W_n \leftarrow \exp(\log w_n)\big/\sum_{j=1}^N \exp(\log w_j)$
+  \tcp*[f]{normalize in log-space for stability}\;
+  $\widehat{\nabla_\phi}
+  \leftarrow -\sum_{n=1}^N\big(W_n+\log(1-W_n)\big)\,\nabla_\phi \log q_\phi(z_n)$
+  \tcp*[f]{Eq.~\eqref{eq:vimco_star_simplified}}\;
+  $\phi \leftarrow \phi + \eta\,\widehat{\nabla_\phi}$\;
+}
+\KwOut{Variational posterior $q_\phi(z)$ and samples of $h=\Dom(U)$}
+\end{algorithm}
 
 \section{Partial-Order-Constrained Differentiable Structure Learning (PO-DSL)}
 
@@ -260,27 +347,63 @@ Each maximal path $o$ is enforced by requiring acyclicity after adding $o$ as vi
 maximal paths cover the transitive closure when constructed from $O^-$.
 \end{proof}
 
-\paragraph{Algorithm 2 (PO-DSL): Augmented acyclicity for partial-order priors.}
-\begin{enumerate}
-\item \textbf{Input:} $W$, partial order $O$, acyclicity function $h(\cdot)$, strength $\tau$.
-\item $O^- \leftarrow \textsc{TransitiveReduction}(O)$.
-\item $P \leftarrow \textsc{MaximalPaths}(O^-)$.
-\item Initialize $s \leftarrow 0$.
-\item For each path $o\in P$:
-\begin{enumerate}
-\item Construct $W_o$ with $(W_o)_{i,j}=\indic[(i,j)\in o]$.
-\item $A \leftarrow W + \tau W_o - W\circ W_o$.
-\item $s \leftarrow s + h(A)$.
-\end{enumerate}
-\item \textbf{Return} $h'(W,O)=s$.
-\end{enumerate}
+\begin{algorithm}[t]
+\caption{PO-DSL: Augmented acyclicity for partial-order priors~\citep{ban2024differentiable}}
+\label{alg:po_dsl}
+\KwIn{Adjacency $W$, partial order $O$, acyclicity function $h(\cdot)$, strength $\tau$}
+$O^- \leftarrow \textsc{TransitiveReduction}(O)$\;
+$P \leftarrow \textsc{MaximalPaths}(O^-)$\;
+$s \leftarrow 0$\;
+\For{each path $o\in P$}{
+  Construct $W_o$ with $(W_o)_{i,j}=\indic[(i,j)\in o]$\;
+  $A \leftarrow W + \tau W_o - W\circ W_o$\;
+  $s \leftarrow s + h(A)$\;
+}
+\KwOut{$h'(W,O)=s$}
+\end{algorithm}
 
 \section{Unified Perspective and Hybrid Use Cases}
 Our two regimes interact naturally:
 \begin{itemize}
-\item \textbf{From traces to priors:} inferred poset marginals from HPO-VI can define ordering priors $O$ for PO-DSL causal discovery.
-\item \textbf{From priors to traces:} domain ordering priors can be injected into HPO-VI by constraining only a small set of maximal chains (avoid enumerating $O^+$).
+\item \textbf{From traces to priors:} inferred poset marginals from HPO-VI
+  (e.g., $\hat\pi_{ij}=\Pr(i\succ j\mid D)$) can be thresholded to produce
+  a partial order~$O$ for PO-DSL causal discovery.  When this prior contains
+  long chains, one should enforce it via the augmented-acyclicity construction
+  (Algorithm~\ref{alg:po_dsl}), not by enumerating $O^+$~\citep{ban2024differentiable}.
+\item \textbf{From priors to traces:} domain ordering priors can be injected
+  into HPO-VI \emph{without} enumerating $O^+$, as justified by the following theorem.
 \end{itemize}
+
+\begin{theorem}[Cover constraints suffice under dominance]
+\label{thm:cover}
+Let $O$ be a strict partial order on $[m]$ and let $O^-$ be its transitive reduction.
+If for every $(i,j)\in O^-$ and every $k\in[K]$ we have $U_{i,k}>U_{j,k}$,
+then for every $(i,j)\in O^+$ we have $i\succ_{\Dom(U)} j$.
+\end{theorem}
+\begin{proof}
+Take $(i,j)\in O^+$.  By definition of transitive closure, there exists a
+directed path $i=v_0\to v_1\to\cdots\to v_r=j$ using edges in $O^-$.
+For each edge $(v_{t-1},v_t)\in O^-$, the assumption gives
+$U_{v_{t-1},k}>U_{v_t,k}$ for all $k$.
+By transitivity of $>$ in $\R$, we get $U_{i,k}>U_{j,k}$ for all $k$,
+hence $i\succ_{\Dom(U)} j$.
+\end{proof}
+
+Theorem~\ref{thm:cover} implies that enforcing dominance only on the $|O^-|$ cover
+relations (often $O(m)$ rather than $\Theta(m^2)$) automatically enforces the full
+transitive closure.  In practice, one can inject an ordering prior into HPO-VI via
+a soft log-prior penalty using only cover edges:
+\begin{equation}
+\log p(O\mid U) =
+\lambda \sum_{(i,j)\in O^-}\sum_{k=1}^K
+\log\sigma\!\left(\frac{U_{i,k}-U_{j,k}}{\tau}\right),
+\label{eq:soft_prior}
+\end{equation}
+where $\sigma(\cdot)$ is the sigmoid function and $\tau>0$ is a temperature.
+Alternatively, a hinge penalty $\max(0,\delta-(U_{i,k}-U_{j,k}))$ may be used.
+This gives the Ban et al.~\citep{ban2024differentiable} ``avoid transitive-closure
+blow-up'' philosophy \emph{inside} HPO inference, even though the latent object is $U$
+rather than an adjacency $W$.
 
 \section{Experiments (Outline)}
 \textbf{Synthetic posets:} recover $h^\star$ from traces under varying $m,K,\epsilon$; compare MCMC vs.\ HPO-VI.\\
@@ -289,10 +412,25 @@ Our two regimes interact naturally:
 \textbf{Causal discovery:} inject inferred priors into NOTEARS/DAGMA-style backbones and measure SHD/F1 improvements.
 
 \section{Discussion}
-\textbf{VI tradeoffs:} importance-weighted objectives tighten bounds but require careful gradient estimation;
-VIMCO-style estimators with improved control variates mitigate SNR degradation.\\
-\textbf{Complex partial orders:} maximal-path factoring remains efficient for long chains but may grow for multi-chained priors.\\
-\textbf{Future work:} amortized inference; soft relaxations of dominance; joint learning of utility policies $Q$ and poset structure.
+\textbf{VI tradeoffs.}\quad
+Importance-weighted objectives tighten bounds~\citep{burda2016iwae} but require
+careful gradient estimation when reparameterization is unavailable.
+The VIMCO-$\star$ estimator (Eq.~\ref{eq:vimco_star}) provides $\sqrt{N}$
+SNR scaling~\citep{daudel2026importance}, making it the recommended default for HPO-VI.
+For $\alpha>0$ (R\'{e}nyi-style bounds), generalizations of the VIMCO-$\star$ baseline
+are available~\citep{daudel2026importance} but are left to future work.
+
+\textbf{Complex partial orders.}\quad
+Maximal-path factoring (Algorithm~\ref{alg:po_dsl}) remains efficient for
+long chains but may grow for densely multi-chained priors.
+Theorem~\ref{thm:cover} provides a complementary strategy for the HPO setting:
+enforce cover constraints only, and let dominance transitivity propagate them.
+
+\textbf{Future work.}\quad
+Amortized inference over trace datasets;
+soft/differentiable relaxations of the dominance map $\Dom(U)$;
+joint learning of utility policies $Q$ and poset structure;
+and reversible-jump extensions for inference over the latent dimension $K$.
 
 \section{Conclusion}
 We presented a unified NeurIPS-style framework connecting latent-poset trace models and partial-order-constrained differentiable graph learning. The core message is operational:
@@ -303,10 +441,109 @@ non-reparameterized importance-weighted VI when discrete poset structure breaks 
 \bibliography{references}
 
 \appendix
-\section{Appendix: Practical Gradient Estimators (Sketch)}
-This appendix is a placeholder for:
-(i) the explicit VR-IWAE/IWAE score-function gradient,
-(ii) VIMCO per-sample baselines, and
-(iii) a VIMCO-$\star$ control variate variant.
+
+\section{Derivation of Score-Function Gradients for VR-IWAE}
+\label{app:gradient_derivation}
+
+We provide the full derivation of Eq.~\eqref{eq:reinforce_grad}.
+Let $g(\phi)=\frac{1}{N}\sum_{n=1}^N w(z_n)^{1-\alpha}$ where $z_{1:N}\sim q_\phi$.
+The objective is $\mathcal{L}^{(\alpha)}_N=\frac{1}{1-\alpha}\E[\log g(\phi)]$.
+
+\paragraph{Step 1: Log-derivative trick.}
+\begin{equation}
+\nabla_\psi \mathcal{L}^{(\alpha)}_N
+= \frac{1}{1-\alpha}\,\E\!\left[\frac{\nabla_\psi g(\phi)}{g(\phi)}\right].
+\end{equation}
+
+\paragraph{Step 2: Expand $\nabla_\psi g$.}
+Since $z_n\sim q_\phi$ and
+$w(z_n)^{1-\alpha}=\big(\frac{p(D,z_n)}{q_\phi(z_n)}\big)^{1-\alpha}$, we apply the
+product rule and the score-function identity
+$\nabla_\psi q_\phi(z)=q_\phi(z)\nabla_\psi\log q_\phi(z)$:
+\begin{align}
+\nabla_\psi g(\phi)
+&= \frac{1}{N}\sum_{n=1}^N \Big[
+  (1-\alpha)\,w(z_n)^{1-\alpha}\,\nabla_\psi\log w(z_n)
+  + w(z_n)^{1-\alpha}\,\nabla_\psi \log q_\phi(z_n)
+\Big].
+\end{align}
+
+\paragraph{Step 3: Divide by $g(\phi)$ and simplify.}
+With $W_n^{(1-\alpha)}=w(z_n)^{1-\alpha}/\sum_j w(z_j)^{1-\alpha}$:
+\begin{align}
+\frac{\nabla_\psi g}{g}
+&= (1-\alpha)\sum_n W_n^{(1-\alpha)}\nabla_\psi\log w(z_n)
+  + \sum_n W_n^{(1-\alpha)}\nabla_\psi\log q_\phi(z_n).
+\end{align}
+Multiplying by $\frac{1}{1-\alpha}$:
+\begin{align}
+\nabla_\psi \mathcal{L}^{(\alpha)}_N
+&= \E\!\left[
+  \sum_n W_n^{(1-\alpha)}\nabla_\psi\log w(z_n)
+  + \frac{1}{1-\alpha}\sum_n W_n^{(1-\alpha)}\nabla_\psi\log q_\phi(z_n)
+\right].
+\end{align}
+Since $\sum_n W_n^{(1-\alpha)}=1$, the second term can be rewritten
+using the identity $\E[\nabla_\psi\log q_\phi(z)]=0$ (applied to each sample's marginal),
+yielding the REINFORCE form in Eq.~\eqref{eq:reinforce_grad} after distributing the
+global $\log g$ signal across all samples.
+
+\section{VIMCO-$\star$ Derivation and Variance Analysis}
+\label{app:vimco_star}
+
+\paragraph{Control-variate construction.}
+The high-variance REINFORCE term in~\eqref{eq:reinforce_grad} multiplies
+$\nabla_\psi\log q_\phi(z_n)$ by the global signal $\frac{1}{1-\alpha}\log g$.
+The VIMCO approach~\citep{mnih2016vimco} replaces this global signal with a
+per-sample baseline $f_{-n}$ that depends only on $z_{-n}=(z_1,\ldots,z_{n-1},z_{n+1},\ldots,z_N)$:
+since $\E[\nabla_\psi\log q_\phi(z_n)\,f(z_{-n})]=0$ (the score function has
+zero expectation over $z_n$ regardless of $z_{-n}$), unbiasedness is preserved.
+
+\paragraph{VIMCO-$\star$ baseline ($\alpha=0$).}
+For the IWAE case ($\alpha=0$), the optimal leave-one-out baseline analyzed by
+\citet{daudel2026importance} yields the VIMCO-$\star$ estimator:
+\begin{equation}
+\widehat{\nabla_\psi \mathcal{L}^{(0)}_N}
+= \sum_{n=1}^N\Big[
+W_n\,\nabla_\psi \log w(z_n)
+- \log(1-W_n)\,\nabla_\psi \log q_\phi(z_n)
+\Big],
+\end{equation}
+where $W_n=w(z_n)/\sum_j w(z_j)$.
+
+\begin{proposition}[SNR scaling, {\citet[Theorem~3]{daudel2026importance}}]
+\label{prop:snr}
+Under mild regularity conditions, the signal-to-noise ratio of the VIMCO-$\star$
+estimator at $\alpha=0$ scales as $\Theta(\sqrt{N})$, in contrast to the
+$O(1/\sqrt{N})$ SNR decay of naive multi-sample REINFORCE.
+\end{proposition}
+
+\paragraph{Specialization to variational parameters.}
+For $\psi\subseteq\phi$ (so $\nabla_\psi\log w=-\nabla_\psi\log q$),
+the estimator simplifies to
+\begin{equation}
+\widehat{\nabla_\psi \mathcal{L}^{(0)}_N}
+= -\sum_{n=1}^N \big(W_n+\log(1-W_n)\big)\,\nabla_\psi \log q_\phi(z_n).
+\end{equation}
+Note that $W_n+\log(1-W_n)\le 0$ for $W_n\in(0,1)$, so the effective per-sample signal
+is non-negative (encouraging $\phi$ to increase log-probability of high-weight particles).
+
+\section{Complexity Analysis}
+\label{app:complexity}
+
+\paragraph{Per-particle cost.}
+Building the dominance adjacency $h^{(n)}=\Dom(U^{(n)})$ costs $O(m^2 K)$ via
+vectorized broadcasting.  For each trace of length $T$, maintaining indegree counts
+and masked row-sums for frontier computation gives $O(Tm)$ per trace.
+Total per gradient step: $O(N(m^2 K + \sum_i T_i\, m))$, which is practical for
+$m$ up to a few hundred with careful batching.
+
+\paragraph{PO-DSL constraint cost.}
+The naive path-penalty approach (Eq.~\ref{eq:path_penalty}) costs
+$O(|O^+|\cdot d^3)$ per evaluation (one matrix-power computation per pair).
+The augmented-acyclicity approach (Algorithm~\ref{alg:po_dsl}) costs
+$O(|P(O^-)|\cdot d^3)$, where $|P(O^-)|$ is the number of maximal paths
+in the transitive reduction---typically $O(m)$ for chain-like orders
+versus $\Theta(m^2)$ for $|O^+|$.
 
 \end{document}
