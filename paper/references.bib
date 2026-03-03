@@ -1,29 +1,12 @@
-@article{zheng2018notears,
-  title={{DAGs with NO TEARS}: Continuous Optimization for Structure Learning},
-  author={Zheng, Xun and Aragam, Bryon and Ravikumar, Pradeep and Xing, Eric P.},
-  journal={NeurIPS},
-  year={2018}
-}
+% ============================================================
+%  Core VI / gradient-estimation references
+% ============================================================
 
-@article{tucker2018rebar,
-  title={Doubly Reparameterized Gradient Estimators for Monte Carlo Objectives},
-  author={Tucker, George and Mnih, Andriy and Maddison, Chris J. and Lawson, Dieterich and Sohl-Dickstein, Jascha},
-  journal={ICLR},
-  year={2019}
-}
-
-@inproceedings{ban2024differentiable,
-  title={Differentiable Structure Learning with Partial Orders},
-  author={Ban, Xueyu and Bhatt, Aarti and Gao, Tianjiao and Wei, Qi},
-  booktitle={Advances in Neural Information Processing Systems (NeurIPS)},
-  year={2024}
-}
-
-@article{daudel2026importance,
-  title={Importance Weighted Variational Inference without the Reparameterization Trick},
-  author={Daudel, Kei and Tran, Duc and Zhang, Cheng},
-  journal={arXiv preprint arXiv:2602.01412},
-  year={2026}
+@inproceedings{burda2016iwae,
+  title={Importance Weighted Autoencoders},
+  author={Burda, Yuri and Grosse, Roger and Salakhutdinov, Ruslan},
+  booktitle={International Conference on Learning Representations (ICLR)},
+  year={2016}
 }
 
 @inproceedings{mnih2016vimco,
@@ -33,11 +16,18 @@
   year={2016}
 }
 
-@inproceedings{burda2016iwae,
-  title={Importance Weighted Autoencoders},
-  author={Burda, Yuri and Grosse, Roger and Salakhutdinov, Ruslan},
-  booktitle={International Conference on Learning Representations (ICLR)},
-  year={2016}
+@article{daudel2026importance,
+  title={Importance Weighted Variational Inference without the Reparameterization Trick},
+  author={Daudel, Kei and Tran, Duc and Zhang, Cheng},
+  journal={arXiv preprint arXiv:2602.01412},
+  year={2026}
+}
+
+@article{tucker2019doubly,
+  title={Doubly Reparameterized Gradient Estimators for {Monte Carlo} Objectives},
+  author={Tucker, George and Mnih, Andriy and Maddison, Chris J. and Lawson, Dieterich and Sohl-Dickstein, Jascha},
+  journal={ICLR},
+  year={2019}
 }
 
 @article{bornschein2015reweighted,
@@ -47,6 +37,113 @@
   year={2015}
 }
 
+@article{kingma2014adam,
+  title={Adam: A Method for Stochastic Optimization},
+  author={Kingma, Diederik P. and Ba, Jimmy},
+  journal={ICLR},
+  year={2015}
+}
+
+@article{kingma2014vae,
+  title={Auto-Encoding Variational {Bayes}},
+  author={Kingma, Diederik P. and Welling, Max},
+  journal={ICLR},
+  year={2014}
+}
+
+@article{rezende2014stochastic,
+  title={Stochastic Backpropagation and Approximate Inference in Deep Generative Models},
+  author={Rezende, Danilo Jimenez and Mohamed, Shakir and Wierstra, Daan},
+  journal={ICML},
+  year={2014}
+}
+
+@article{williams1992reinforce,
+  title={Simple Statistical Gradient-Following Algorithms for Connectionist Reinforcement Learning},
+  author={Williams, Ronald J.},
+  journal={Machine Learning},
+  volume={8},
+  pages={229--256},
+  year={1992}
+}
+
+@article{li2016renyi,
+  title={R\'{e}nyi Divergence Variational Inference},
+  author={Li, Yingzhen and Turner, Richard E.},
+  journal={NeurIPS},
+  year={2016}
+}
+
+@inproceedings{blei2017variational,
+  title={Variational Inference: A Review for Statisticians},
+  author={Blei, David M. and Kucukelbir, Alp and McAuliffe, Jon D.},
+  booktitle={Journal of the American Statistical Association},
+  volume={112},
+  pages={859--877},
+  year={2017}
+}
+
+% ============================================================
+%  Structure learning / causal discovery references
+% ============================================================
+
+@inproceedings{zheng2018notears,
+  title={{DAGs with NO TEARS}: Continuous Optimization for Structure Learning},
+  author={Zheng, Xun and Aragam, Bryon and Ravikumar, Pradeep and Xing, Eric P.},
+  booktitle={NeurIPS},
+  year={2018}
+}
+
+@inproceedings{bello2022dagma,
+  title={{DAGMA}: Learning {DAGs} via {M}-Matrices and a Log-Determinant Acyclicity Characterization},
+  author={Bello, Kevin and Aragam, Bryon and Ravikumar, Pradeep},
+  booktitle={NeurIPS},
+  year={2022}
+}
+
+@inproceedings{ban2024differentiable,
+  title={Differentiable Structure Learning with Partial Orders},
+  author={Ban, Xueyu and Bhatt, Aarti and Gao, Tianjiao and Wei, Qi},
+  booktitle={Advances in Neural Information Processing Systems (NeurIPS)},
+  year={2024}
+}
+
+@article{chickering2002optimal,
+  title={Optimal Structure Identification with Greedy Search},
+  author={Chickering, David Maxwell},
+  journal={Journal of Machine Learning Research},
+  volume={3},
+  pages={507--554},
+  year={2002}
+}
+
+@book{pearl2009causality,
+  title={Causality},
+  author={Pearl, Judea},
+  publisher={Cambridge University Press},
+  year={2009},
+  edition={2nd}
+}
+
+@book{spirtes2001causation,
+  title={Causation, Prediction, and Search},
+  author={Spirtes, Peter and Glymour, Clark and Scheines, Richard},
+  publisher={MIT Press},
+  year={2001},
+  edition={2nd}
+}
+
+@inproceedings{yu2019dag,
+  title={{DAG-GNN}: {DAG} Structure Learning with Graph Neural Networks},
+  author={Yu, Yue and Chen, Jie and Gao, Tian and Yu, Mo},
+  booktitle={ICML},
+  year={2019}
+}
+
+% ============================================================
+%  Plackett--Luce / choice models
+% ============================================================
+
 @article{plackett1975luce,
   title={The Analysis of Permutations},
   author={Plackett, Robin L.},
@@ -55,4 +152,119 @@
   number={2},
   pages={193--202},
   year={1975}
+}
+
+@book{luce1959individual,
+  title={Individual Choice Behavior: A Theoretical Analysis},
+  author={Luce, R. Duncan},
+  publisher={John Wiley \& Sons},
+  year={1959}
+}
+
+@article{marden1996analyzing,
+  title={Analyzing and Modeling Rank Data},
+  author={Marden, John I.},
+  journal={Monographs on Statistics and Applied Probability},
+  publisher={Chapman \& Hall},
+  year={1996}
+}
+
+% ============================================================
+%  Partial orders / posets / lattice theory
+% ============================================================
+
+@book{davey2002introduction,
+  title={Introduction to Lattices and Order},
+  author={Davey, Brian A. and Priestley, Hilary A.},
+  publisher={Cambridge University Press},
+  edition={2nd},
+  year={2002}
+}
+
+@article{mannila2000partial,
+  title={Discovery of Frequent Episodes in Event Sequences},
+  author={Mannila, Heikki and Toivonen, Hannu and Verkamo, A. Inkeri},
+  journal={Data Mining and Knowledge Discovery},
+  volume={1},
+  number={3},
+  pages={259--289},
+  year={1997}
+}
+
+% ============================================================
+%  Process mining / workflow / traces
+% ============================================================
+
+@book{vanderaalst2016process,
+  title={Process Mining: Data Science in Action},
+  author={van der Aalst, Wil M.P.},
+  publisher={Springer},
+  edition={2nd},
+  year={2016}
+}
+
+@article{weijters2006process,
+  title={Process Mining with the {HeuristicsMiner} Algorithm},
+  author={Weijters, A.J.M.M. and van der Aalst, Wil M.P. and Alves de Medeiros, A.K.},
+  journal={BETA Working Paper Series},
+  year={2006}
+}
+
+@inproceedings{leemans2013discovering,
+  title={Discovering Block-Structured Process Models from Event Logs--A Constructive Approach},
+  author={Leemans, Sander J.J. and Fahland, Dirk and van der Aalst, Wil M.P.},
+  booktitle={International Conference on Applications and Theory of Petri Nets and Concurrency},
+  pages={311--329},
+  year={2013}
+}
+
+% ============================================================
+%  LLM agents / tool-use traces
+% ============================================================
+
+@article{yao2023react,
+  title={{ReAct}: Synergizing Reasoning and Acting in Language Models},
+  author={Yao, Shunyu and Zhao, Jeffrey and Yu, Dian and Du, Nan and Shafran, Izhak and Narasimhan, Karthik and Cao, Yuan},
+  journal={ICLR},
+  year={2023}
+}
+
+@article{schick2024toolformer,
+  title={Toolformer: Language Models Can Teach Themselves to Use Tools},
+  author={Schick, Timo and Dwivedi-Yu, Jane and Dess{\`i}, Roberto and Raileanu, Roberta and Lomeli, Maria and Hambro, Eric and Zettlemoyer, Luke and Cancedda, Nicola and Scialom, Thomas},
+  journal={NeurIPS},
+  year={2024}
+}
+
+% ============================================================
+%  MCMC / Bayesian inference baselines
+% ============================================================
+
+@article{neal2003slice,
+  title={Slice Sampling},
+  author={Neal, Radford M.},
+  journal={The Annals of Statistics},
+  volume={31},
+  number={3},
+  pages={705--767},
+  year={2003}
+}
+
+@article{hoffman2014nuts,
+  title={The {No-U-Turn Sampler}: Adaptively Setting Path Lengths in {Hamiltonian Monte Carlo}},
+  author={Hoffman, Matthew D. and Gelman, Andrew},
+  journal={Journal of Machine Learning Research},
+  volume={15},
+  pages={1593--1623},
+  year={2014}
+}
+
+@article{green1995reversible,
+  title={Reversible Jump {Markov Chain Monte Carlo} Computation and {Bayesian} Model Determination},
+  author={Green, Peter J.},
+  journal={Biometrika},
+  volume={82},
+  number={4},
+  pages={711--732},
+  year={1995}
 }
